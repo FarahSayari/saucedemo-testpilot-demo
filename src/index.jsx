@@ -90,3 +90,5 @@ const routing = (
 
 const root = createRoot(document.getElementById("root"));
 root.render(routing);
+
+// CI demo: verify automatic regression after a push.
