@@ -42,9 +42,10 @@ jobs:
 
       - name: Verify pipeline contracts without contacting TestPilot
         run: |
-          & .github/scripts/tests/invoke-testpilot-cycle.tests.ps1
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .github/scripts/tests/invoke-testpilot-cycle.tests.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & .github/scripts/tests/local-deployment.tests.ps1
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .github/scripts/tests/local-deployment.tests.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build, deploy locally, and await TestPilot regression
         id: regression

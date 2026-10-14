@@ -10,6 +10,25 @@ $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $clientScript = Join-Path $repositoryRoot '.github\scripts\invoke-testpilot-cycle.ps1'
 $mockScript = Join-Path $PSScriptRoot 'mock-testpilot-api.js'
 
+# Windows PowerShell wraps redirected error messages to the runner's console
+# width. Require the same authorization explanation, allowing only whitespace
+# differences between its words (not a different error or a successful request).
+$authorizationFailurePattern = 'lacks\s+the\s+required\s+scope\s+or\s+project\s+access'
+foreach ($message in @(
+    'lacks the required scope or project access',
+    "lacks the required`r`n scope or project access",
+    "lacks the required scope or`r`n project access"
+)) {
+    if ($message -notmatch $authorizationFailurePattern) {
+        throw 'Authorization diagnostic matcher rejected console-wrapped output.'
+    }
+}
+foreach ($message in @('Unable to reach TestPilot', 'malformed JSON', 'request passed')) {
+    if ($message -match $authorizationFailurePattern) {
+        throw 'Authorization diagnostic matcher accepted an unrelated outcome.'
+    }
+}
+
 function Invoke-Scenario {
     param(
         [string]$Mode,
@@ -168,8 +187,8 @@ function Invoke-Scenario {
         elseif ($Mode -eq 'malformed' -and $combinedLog -notmatch 'malform\s*ed\s+JSON') {
             throw 'Malformed-response scenario did not report malformed JSON.'
         }
-        elseif ($Mode -eq 'forbidden' -and $combinedLog -notmatch 'lacks the required scope or project access') {
-            throw 'HTTP-error scenario did not report the authorization failure safely.'
+        elseif ($Mode -eq 'forbidden' -and $combinedLog -notmatch $authorizationFailurePattern) {
+            throw "HTTP-error scenario did not report the authorization failure safely. Captured mock-client output: $combinedLog"
         }
         elseif ($Mode -eq 'unavailable' -and $combinedLog -notmatch 'Unable to reach TestPilot') {
             throw 'Unavailable-API scenario did not report the connectivity failure clearly.'
