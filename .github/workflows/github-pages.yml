@@ -11,6 +11,8 @@ on:
 
 jobs:
   deploy:
+    # Never publish this laptop demo or inherit the upstream saucedemo.com CNAME.
+    if: github.repository == 'saucelabs/sample-app-web'
     runs-on: ubuntu-latest
     defaults:
       run:

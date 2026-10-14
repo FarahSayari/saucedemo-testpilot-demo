@@ -1,0 +1,61 @@
+name: SauceDemo local build and TestPilot regression
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One version must remain deployed throughout its TestPilot execution.
+concurrency:
+  group: saucedemo-local-testpilot
+  cancel-in-progress: false
+
+jobs:
+  local-regression:
+    if: github.repository == 'FarahSayari/saucedemo-testpilot-demo' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, saucedemo-local]
+    timeout-minutes: 60
+    env:
+      # Command-scope trust for this checkout only, including checkout cleanup.
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: ${{ github.workspace }}
+      TESTPILOT_API_URL: ${{ vars.TESTPILOT_API_URL }}
+      TESTPILOT_WEB_URL: ${{ vars.TESTPILOT_WEB_URL }}
+      TESTPILOT_PROJECT_ID: ${{ vars.TESTPILOT_PROJECT_ID }}
+      TESTPILOT_CYCLE_ID: ${{ vars.TESTPILOT_CYCLE_ID }}
+      TESTPILOT_ENVIRONMENT_ID: ${{ vars.TESTPILOT_ENVIRONMENT_ID }}
+      TESTPILOT_POLL_INTERVAL_SECONDS: ${{ vars.TESTPILOT_POLL_INTERVAL_SECONDS || '5' }}
+      TESTPILOT_TIMEOUT_SECONDS: ${{ vars.TESTPILOT_TIMEOUT_SECONDS || '1800' }}
+    defaults:
+      run:
+        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File {0}
+    steps:
+      - name: Check out the pushed SauceDemo commit
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Verify pipeline contracts without contacting TestPilot
+        run: |
+          & .github/scripts/tests/invoke-testpilot-cycle.tests.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .github/scripts/tests/local-deployment.tests.ps1
+
+      - name: Build, deploy locally, and await TestPilot regression
+        id: regression
+        env:
+          TESTPILOT_CI_CREDENTIAL: ${{ secrets.TESTPILOT_CI_CREDENTIAL }}
+        run: |
+          & .github/scripts/Invoke-LocalPipeline.ps1 `
+            -ApiUrl $env:TESTPILOT_API_URL `
+            -WebUrl $env:TESTPILOT_WEB_URL `
+            -ProjectId $env:TESTPILOT_PROJECT_ID `
+            -CycleId $env:TESTPILOT_CYCLE_ID `
+            -EnvironmentId $env:TESTPILOT_ENVIRONMENT_ID `
+            -PollIntervalSeconds $env:TESTPILOT_POLL_INTERVAL_SECONDS `
+            -TimeoutSeconds $env:TESTPILOT_TIMEOUT_SECONDS

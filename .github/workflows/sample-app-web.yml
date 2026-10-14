@@ -11,6 +11,8 @@ on:
 
 jobs:
   build:
+    # The local TestPilot demo has its own workflow and no Sauce Labs cloud credentials.
+    if: github.repository == 'saucelabs/sample-app-web'
     runs-on: ubuntu-latest
     defaults:
       run:
