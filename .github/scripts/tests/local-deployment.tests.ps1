@@ -64,15 +64,20 @@ function Invoke-WebRequest {
     return [pscustomobject]@{StatusCode=200;Content='<title>Swag Labs</title>'}
 }
 $fixtureRoot=Join-Path $PSScriptRoot 'fixtures'
-foreach ($mode in @('success','build-failure','launch-failure','health-failure')) {
+foreach ($mode in @('success','build-failure','launch-failure','health-failure','relay-failure')) {
     $script:mode=$mode;$script:launched=$false;$script:trace=[Collections.Generic.List[string]]::new()
     $script:names=[Collections.Generic.List[string]]::new()
     foreach ($name in @('saucedemo-local','testpilot-demo-api','testpilot-demo-worker')) { [void]$script:names.Add($name) }
     $failed=$false
-    try { $result=Deploy-LocalApplication $fixtureRoot $script:sha '7001' } catch { $failed=$true }
+    $activeFixtureRoot=if ($mode -eq 'relay-failure') { Join-Path $fixtureRoot 'relay-failure' } else { $fixtureRoot }
+    try { $result=Deploy-LocalApplication $activeFixtureRoot $script:sha '7001' } catch { $failed=$true }
     if ($mode -eq 'success') {
         Assert-True (!$failed) 'Successful deployment fixture failed.'
+        Assert-True (@($result).Count -eq 1 -and $result -is [pscustomobject]) 'Deployment returned diagnostic text alongside its result object.'
+        Assert-True ($result.Image -eq "saucedemo-local:commit-$($script:sha)-run-7001") 'Deployment image tag is missing or incorrect.'
         Assert-True ($result.ImageId -eq 'new-image') 'Incorrect image provenance.'
+        Assert-True ($result.Backup -eq 'saucedemo-local-before-7001' -and
+            $result.Commit -eq $script:sha -and $result.RunId -eq '7001') 'Deployment result lost its backup or commit/run identity.'
         $build=$script:trace.FindIndex([Predicate[string]]{param($value) $value.StartsWith('build ')})
         $stop=$script:trace.FindIndex([Predicate[string]]{param($value) $value.StartsWith('stop ')})
         Assert-True ($build -ge 0 -and $stop -gt $build) 'Live website stopped before build finished.'
@@ -80,7 +85,7 @@ foreach ($mode in @('success','build-failure','launch-failure','health-failure')
         Assert-True $failed 'Build failure did not fail the job.'
         Assert-True (@($script:trace | Where-Object { $_ -match '^(stop|rename|run) ' }).Count -eq 0) 'Build failure disturbed the live application.'
     } else {
-        Assert-True $failed 'Health failure did not fail the job.'
+        Assert-True $failed 'Launch, health or relay failure did not fail the job.'
         Assert-True ($script:trace -contains 'rename saucedemo-local-before-7001 saucedemo-local') 'Rollback did not restore the prior application name.'
         Assert-True ($script:trace -contains 'start saucedemo-local') 'Rollback did not start the prior application.'
     }

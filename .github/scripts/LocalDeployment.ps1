@@ -105,7 +105,9 @@ function Deploy-LocalApplication {
         if (!$ready) { throw 'The candidate application did not become healthy.' }
         Assert-LocalWebsite $candidate.Id
         # Read-only checks: never Install, Remove or Reattach TestPilot relays here.
-        & (Join-Path $RepositoryRoot 'Manage-LocalRelays.ps1') -Action Verify
+        # Display helper/native stdout without returning it as deployment data.
+        # Errors still propagate into the rollback handler below.
+        & (Join-Path $RepositoryRoot 'Manage-LocalRelays.ps1') -Action Verify | Out-Host
         Write-Host "Deployed $image at http://127.0.0.1:3000/. Previous container retained as $backup."
     } catch {
         $failure=$_.Exception.Message
